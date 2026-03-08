@@ -9,6 +9,7 @@ TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 REPORTS_DIR = DATA_DIR / "reports"
 PROFILES_DIR = DATA_DIR / "profiles"
 SESSIONS_DIR = DATA_DIR / "sessions"
+ONBOARDING_DIR = DATA_DIR / "onboarding"
 ASSETS_DIR = BASE_DIR / "assets"
 STYLES_DIR = ASSETS_DIR / "styles"
 
@@ -19,6 +20,7 @@ DIRECTORIES = [
     REPORTS_DIR,
     PROFILES_DIR,
     SESSIONS_DIR,
+    ONBOARDING_DIR,
     ASSETS_DIR,
     STYLES_DIR,
 ]
@@ -274,3 +276,29 @@ PROFILE_EMPTY_STATE = {
     "progress_signals": [],
     "recent_sessions": [],
 }
+
+SAFETY_HELP_OPTIONS = [
+    "clarify a situation",
+    "manage stress",
+    "prepare a decision",
+    "better understand a relationship",
+    "regain momentum",
+]
+
+SESSION_HELP_OPTIONS = [
+    "clearer thinking",
+    "calming down",
+    "making a decision",
+    "speaking better with someone",
+    "recovering energy",
+]
+
+CONTINUATION_OPTIONS = ["free reflection", "guided questions"]
+
+ORIENTATION_OPTIONS = [
+    "overload / stress",
+    "hesitation / decision",
+    "conflict / relationship",
+    "low energy / motivation",
+    "identity / alignment",
+]

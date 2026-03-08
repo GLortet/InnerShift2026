@@ -8,24 +8,31 @@ from config import (
     APP_BASELINE,
     APP_NAME,
     APP_SUBTITLE,
+    CONTINUATION_OPTIONS,
     MIN_TRANSCRIPTION_WORDS,
+    ORIENTATION_OPTIONS,
+    SAFETY_HELP_OPTIONS,
+    SESSION_HELP_OPTIONS,
     SCORE_LABELS,
     STYLES_DIR,
     UI_NAVIGATION,
 )
 from modules.audio_processing import detect_audio_mime_type, load_audio_bytes, save_streamlit_audio
 from modules.nlp_analysis import analyze_transcript
+from modules.onboarding import compute_onboarding_insights, evaluate_safety, get_module_for_orientation
 from modules.profile_manager import load_profile, rebuild_profile
 from modules.report_generator import generate_report
 from modules.session_manager import (
     attach_analysis,
     attach_audio,
+    attach_onboarding,
     attach_report,
     attach_transcription,
     create_session,
     get_preferred_audio_path,
     get_report_path,
     list_sessions,
+    load_onboarding,
     load_session,
     update_session_title,
     update_transcription_text,
@@ -115,6 +122,84 @@ def session_status_label(session: dict[str, Any]) -> str:
     }.get(session.get("status"), session.get("status", "Inconnue"))
 
 
+
+
+def _radio_index(options: list[str], value: str | None) -> int:
+    if value in options:
+        return options.index(value)
+    return 0
+
+
+def render_onboarding(session: dict[str, Any]) -> tuple[dict[str, Any] | None, bool]:
+    existing = load_onboarding(session.get("id")) or {}
+    onboarding = {
+        "safety": existing.get("safety", {}),
+        "intention": existing.get("intention", {}),
+        "orientation": existing.get("orientation", {}),
+        "module": existing.get("module", {}),
+        "insights": existing.get("insights", {}),
+        "completed": existing.get("completed", False),
+    }
+
+    st.markdown("### 0. Safety check")
+    safety = onboarding["safety"]
+    safety["main_help"] = st.radio("What do you mainly want help with today?", SAFETY_HELP_OPTIONS, index=_radio_index(SAFETY_HELP_OPTIONS, safety.get("main_help")), key=f"safe_help_{session['id']}")
+    safety["immediate_danger"] = st.radio("Are you currently in immediate danger or in an emergency situation?", ["no", "yes"], index=_radio_index(["no", "yes"], safety.get("immediate_danger")), key=f"safe_danger_{session['id']}")
+    safety["harm_thoughts"] = st.radio("Are you having thoughts of hurting yourself or someone else?", ["no", "yes"], index=_radio_index(["no", "yes"], safety.get("harm_thoughts")), key=f"safe_harm_{session['id']}")
+    safety["unable_to_function"] = st.radio("Do you feel so overwhelmed that you are unable to function?", ["no", "yes"], index=_radio_index(["no", "yes"], safety.get("unable_to_function")), key=f"safe_overwhelm_{session['id']}")
+    safety["support_preference"] = st.radio("Would you prefer to continue with a self-reflection tool, or would you prefer human support?", ["continue with the tool", "I would prefer human support"], index=_radio_index(["continue with the tool", "I would prefer human support"], safety.get("support_preference")), key=f"safe_support_{session['id']}")
+
+    safety_state = evaluate_safety(safety)
+    onboarding["safety"] = {**safety, **safety_state}
+
+    if safety_state["blocked"]:
+        st.warning("Thank you for sharing this. InnerShift is a self-reflection tool and may not be the right support right now. Please contact local emergency services or a trusted human support line in your area.")
+        onboarding["completed"] = False
+        if st.button("Save safety response", key=f"save_onboarding_blocked_{session['id']}"):
+            attach_onboarding(session, onboarding)
+            st.success("Safety response saved.")
+        return onboarding, True
+
+    st.markdown("### 1. Session intention")
+    intention = onboarding["intention"]
+    intention["topic"] = st.text_input("What topic would you like to clarify today?", value=intention.get("topic", ""), key=f"intent_topic_{session['id']}")
+    intention["heaviest_part"] = st.text_area("What feels most heavy or most important about this topic right now?", value=intention.get("heaviest_part", ""), height=110, key=f"intent_heavy_{session['id']}")
+    intention["session_outcome"] = st.text_input("What would you like to obtain by the end of this session?", value=intention.get("session_outcome", ""), key=f"intent_outcome_{session['id']}")
+    intention["help_type"] = st.radio("What kind of help would be most useful right now?", SESSION_HELP_OPTIONS, index=_radio_index(SESSION_HELP_OPTIONS, intention.get("help_type")), key=f"intent_help_{session['id']}")
+    intention["continuation_mode"] = st.radio("How would you like to continue?", CONTINUATION_OPTIONS, index=_radio_index(CONTINUATION_OPTIONS, intention.get("continuation_mode")), key=f"intent_mode_{session['id']}")
+
+    st.markdown("### 2. Quick orientation")
+    orientation_area = st.radio("Which area best matches what you are experiencing right now?", ORIENTATION_OPTIONS, index=_radio_index(ORIENTATION_OPTIONS, onboarding.get("orientation", {}).get("area")), key=f"orient_{session['id']}")
+    onboarding["orientation"] = {"area": orientation_area}
+
+    module_schema = get_module_for_orientation(orientation_area)
+    module_answers = onboarding.get("module", {}).get("answers", {})
+    st.markdown(f"### 3. Guided module · {module_schema.get('title', '')}")
+    st.caption(module_schema.get("goal", ""))
+    for question in module_schema.get("questions", []):
+        qid = question["id"]
+        label = question["label"]
+        qtype = question["type"]
+        key = f"module_{qid}_{session['id']}"
+        if qtype == "choice":
+            options = question.get("options", [])
+            module_answers[qid] = st.radio(label, options, index=_radio_index(options, module_answers.get(qid)), key=key)
+        elif qtype == "long_text":
+            module_answers[qid] = st.text_area(label, value=module_answers.get(qid, ""), height=90, key=key)
+        else:
+            module_answers[qid] = st.text_input(label, value=module_answers.get(qid, ""), key=key)
+
+    onboarding["module"] = {"name": module_schema.get("title"), "answers": module_answers}
+    onboarding["insights"] = compute_onboarding_insights(onboarding)
+    onboarding["completed"] = True
+
+    if st.button("Save onboarding", type="primary", key=f"save_onboarding_{session['id']}"):
+        attach_onboarding(session, onboarding)
+        st.success("Onboarding saved.")
+        st.rerun()
+
+    return onboarding, False
+
 def render_signal_list(title: str, signals: list[dict[str, Any]]) -> None:
     st.markdown(f"#### {title}")
     if not signals:
@@ -138,6 +223,20 @@ def render_analysis_results(analysis: dict[str, Any]) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    synthesis = analysis.get("synthesis", {})
+    if synthesis:
+        st.markdown("#### Structured synthesis")
+        st.markdown(f"- **dominant intention**: {synthesis.get('dominant_intention', 'N/A')}")
+        st.markdown(f"- **current load**: {synthesis.get('current_load', 'N/A')}")
+        st.markdown(f"- **current needs**: {', '.join(synthesis.get('current_needs', []))}")
+        st.markdown(f"- **likely relational posture**: {synthesis.get('likely_relational_posture', 'N/A')}")
+        st.markdown(f"- **dominant mode of functioning**: {synthesis.get('dominant_functioning_mode', 'N/A')}")
+        plan = synthesis.get("action_plan", {})
+        st.markdown("- **action plan**")
+        st.markdown(f"  - next 24h: {plan.get('next_24h', 'N/A')}")
+        st.markdown(f"  - next 7 days: {plan.get('next_7_days', 'N/A')}")
+        st.markdown(f"  - next 30 days: {plan.get('next_30_days', 'N/A')}")
 
     score_columns = st.columns(5)
     for column, (metric, value) in zip(score_columns, analysis.get("scores", {}).items()):
@@ -166,10 +265,18 @@ def render_analysis_results(analysis: dict[str, Any]) -> None:
                 st.markdown(f"- {item}")
         else:
             st.caption("Aucune tension explicite n'a ete detectee de maniere robuste.")
+        if analysis.get("main_tensions"):
+            st.markdown("#### Main tensions")
+            for item in analysis.get("main_tensions", []):
+                st.markdown(f"- {item}")
     with right:
         st.markdown("#### Pistes d'action")
         for item in analysis.get("recommendations", []):
             st.markdown(f"- {item}")
+        if analysis.get("actions_to_test"):
+            st.markdown("#### 3 practical actions to test")
+            for item in analysis.get("actions_to_test", []):
+                st.markdown(f"- {item}")
         st.markdown("#### Mots-cles")
         chips = "".join(
             f"<span class='chip'>{keyword['term']}</span>"
@@ -281,7 +388,11 @@ def render_new_session() -> None:
             st.success("Titre mis a jour.")
             st.rerun()
 
-    st.markdown("### 1. Capture audio")
+    onboarding_payload, blocked = render_onboarding(session)
+    if blocked:
+        return
+
+    st.markdown("### 4. Free reflection (audio)")
     capture_col, upload_col = st.columns(2)
     with capture_col:
         st.markdown("#### Microphone")
@@ -330,7 +441,7 @@ def render_new_session() -> None:
         for warning in audio_info.get("warnings", []):
             st.caption(f"Note audio : {warning}")
 
-    st.markdown("### 2. Transcription")
+    st.markdown("### 5. Transcription")
     language_choice = st.selectbox(
         "Langue attendue",
         options=["auto", "fr", "en"],
@@ -379,7 +490,7 @@ def render_new_session() -> None:
         for warning in transcription.get("warnings", []):
             st.caption(f"Note transcription : {warning}")
 
-    st.markdown("### 3. Analyse")
+    st.markdown("### 6. Analysis synthesis")
     current_transcript_text = session.get("transcription", {}).get("text", "")
     if current_transcript_text:
         editor_key = ensure_transcript_editor_seed(session)
@@ -392,7 +503,7 @@ def render_new_session() -> None:
         if current_transcript_text.strip() != transcription.get("text", "").strip():
             update_transcription_text(session, current_transcript_text, edited=True)
             session = get_active_session() or session
-        analysis_payload = analyze_transcript(current_transcript_text)
+        analysis_payload = analyze_transcript(current_transcript_text, onboarding=onboarding_payload)
         attach_analysis(session, analysis_payload)
         rebuild_profile()
         st.success("Analyse terminee et profil mis a jour.")
@@ -405,7 +516,7 @@ def render_new_session() -> None:
         if st.button("Generer le rapport PDF", key=f"generate_pdf_{session['id']}"):
             try:
                 profile = rebuild_profile()
-                report_payload = generate_report(session, profile)
+                report_payload = generate_report(session, profile, onboarding=load_onboarding(session.get("id")))
                 attach_report(session, report_payload)
                 st.success("Rapport PDF genere.")
                 go_to("Rapport")
@@ -440,7 +551,7 @@ def render_report() -> None:
     if not report_path or not report_path.exists():
         if st.button("Generer le PDF maintenant", type="primary"):
             profile = rebuild_profile()
-            report_payload = generate_report(session, profile)
+            report_payload = generate_report(session, profile, onboarding=load_onboarding(session.get("id")))
             attach_report(session, report_payload)
             st.success("Rapport genere.")
             st.rerun()
@@ -449,6 +560,7 @@ def render_report() -> None:
     st.markdown("#### Contenu du rapport")
     st.markdown("- couverture editoriale et contexte de session")
     st.markdown("- resume executif, idees fortes et tensions")
+    st.markdown("- onboarding: topic, current needs, relational posture, action horizon")
     st.markdown("- indicateurs heuristiques, themes et visualisations")
     st.markdown("- extraits saillants, profil evolutif et note methodologique")
 
@@ -489,7 +601,7 @@ def render_history() -> None:
                 if session.get("analysis") and st.button("PDF", key=f"regen_pdf_{session['id']}"):
                     try:
                         profile = rebuild_profile()
-                        report_payload = generate_report(session, profile)
+                        report_payload = generate_report(session, profile, onboarding=load_onboarding(session.get("id")))
                         attach_report(session, report_payload)
                         st.session_state.active_session_id = session["id"]
                         st.success("PDF regenere.")
