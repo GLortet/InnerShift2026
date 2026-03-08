@@ -10,6 +10,7 @@ InnerShift est un PoC local de clarification strategique personnelle. L'applicat
 - analyse heuristique FR/EN basee sur des regles explicites
 - historique des sessions et profil utilisateur consolide
 - generation automatique d'un rapport PDF multi-pages
+- onboarding guide en 4 couches (safety, intention, orientation, mini-module)
 
 ## Stack
 
@@ -56,7 +57,8 @@ Puis ouvrir l'URL indiquee par Streamlit dans le navigateur.
 │   ├── transcripts/
 │   ├── reports/
 │   ├── profiles/
-│   └── sessions/
+│   ├── sessions/
+│   └── onboarding/
 ├── assets/
 │   ├── logo/
 │   ├── styles/
@@ -76,11 +78,11 @@ Puis ouvrir l'URL indiquee par Streamlit dans le navigateur.
 
 ## Parcours du PoC
 
-1. Creer une session et nommer le sujet du moment.
-2. Enregistrer sa voix ou importer un fichier audio.
+1. Creer une session et passer l'onboarding court (safety, intention, orientation, module guide).
+2. Enregistrer sa voix ou importer un fichier audio pour la reflection libre.
 3. Lancer la transcription Whisper, puis corriger legerement si besoin.
-4. Generer l'analyse heuristique et mettre a jour le profil utilisateur.
-5. Produire puis telecharger un rapport PDF premium.
+4. Generer l'analyse heuristique enrichie par le contexte onboarding.
+5. Produire puis telecharger un rapport PDF premium avec plan 24h/7j/30j.
 
 ## Limites connues
 

@@ -300,7 +300,26 @@ def build_key_topics(dominant_themes: list[dict[str, Any]], keyword_frequencies:
     ]
 
 
-def analyze_transcript(text: str) -> dict[str, Any]:
+
+
+def _build_onboarding_context(onboarding: dict[str, Any] | None) -> dict[str, Any]:
+    if not onboarding:
+        return {}
+    insights = onboarding.get("insights", {})
+    if not insights:
+        return {}
+
+    summary_lines = [
+        f"Dominant intention: {insights.get('dominant_intention', 'Not specified')}",
+        f"Current load: {insights.get('current_load', 'Not specified')}",
+        f"Current needs: {', '.join(insights.get('current_needs', [])) or 'Not specified'}",
+        f"Relational posture: {insights.get('likely_relational_posture', 'Not specified')}",
+        f"Dominant mode of functioning: {insights.get('dominant_functioning_mode', 'Not specified')}",
+    ]
+    return {"summary_lines": summary_lines, "insights": insights}
+
+
+def analyze_transcript(text: str, onboarding: dict[str, Any] | None = None) -> dict[str, Any]:
     corpus = build_analysis_corpus(text)
     sentences = corpus["sentences"]
     filtered_tokens = corpus["filtered_tokens"]
@@ -334,6 +353,21 @@ def analyze_transcript(text: str) -> dict[str, Any]:
         if category_sentences.get(key)
     }
 
+    onboarding_context = _build_onboarding_context(onboarding)
+    onboarding_insights = onboarding_context.get("insights", {})
+    synthesis = {
+        "dominant_intention": onboarding_insights.get("dominant_intention", major_ideas[0] if major_ideas else "Not specified"),
+        "current_load": onboarding_insights.get("current_load", summary),
+        "current_needs": onboarding_insights.get("current_needs", ["clarity"]),
+        "likely_relational_posture": onboarding_insights.get("likely_relational_posture", "Exploratory and open"),
+        "dominant_functioning_mode": onboarding_insights.get("dominant_functioning_mode", (dominant_themes[0]["theme"] if dominant_themes else "guided reflection")),
+        "action_plan": onboarding_insights.get("action_plan", {
+            "next_24h": recommendations[0] if recommendations else "Define one visible next action.",
+            "next_7_days": "Protect one focused block to test your next action.",
+            "next_30_days": "Review progress and adjust your recentering plan.",
+        }),
+    }
+
     return {
         "summary": summary,
         "major_ideas": major_ideas,
@@ -345,6 +379,11 @@ def analyze_transcript(text: str) -> dict[str, Any]:
         "contradictions": contradictions,
         "tensions": contradictions,
         "recommendations": recommendations,
+        "synthesis": synthesis,
+        "main_tensions": onboarding_insights.get("main_tensions", contradictions[:3]),
+        "possible_stress_signals": onboarding_insights.get("possible_stress_signals", [signal["signal"] for signal in emotional_signals[:3]]),
+        "strengths_resources": onboarding_insights.get("strengths_resources", []),
+        "actions_to_test": onboarding_insights.get("actions_to_test", recommendations[:3]),
         "scores": scores,
         "score_explanations": SCORE_EXPLANATIONS,
         "quotes_or_salient_sentences": salient_sentences,
@@ -353,6 +392,7 @@ def analyze_transcript(text: str) -> dict[str, Any]:
         "keyword_frequencies": keyword_frequencies,
         "analysis_notes": [
             "Lecture heuristique locale a partir de signaux lexicaux et structurels.",
+            *onboarding_context.get("summary_lines", []),
             DISCLAIMER_TEXT,
         ],
         "meta": {

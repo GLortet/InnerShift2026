@@ -160,7 +160,7 @@ def _cover_page(pdf: canvas.Canvas, session: dict[str, Any]) -> None:
     pdf.drawRightString(PAGE_WIDTH - MARGIN, 36, "InnerShift · Rapport exploratoire")
 
 
-def _summary_page(pdf: canvas.Canvas, analysis: dict[str, Any]) -> None:
+def _summary_page(pdf: canvas.Canvas, analysis: dict[str, Any], onboarding: dict[str, Any] | None = None) -> None:
     _draw_page_header(pdf, "Resume executif", "Lecture synthesee de la session", 2)
     _draw_panel(pdf, MARGIN, PAGE_HEIGHT - 260, PAGE_WIDTH - (MARGIN * 2), 150, COLORS["panel_alt"])
     pdf.setFillColor(COLORS["primary"])
@@ -302,8 +302,42 @@ def _profile_page(pdf: canvas.Canvas, profile: dict[str, Any], history_chart: by
     )
 
 
+
+
+def _onboarding_page(pdf: canvas.Canvas, onboarding: dict[str, Any] | None, analysis: dict[str, Any]) -> None:
+    _draw_page_header(pdf, "Onboarding synthesis", "Session topic, needs, posture, and action horizon", 6)
+    insights = (onboarding or {}).get("insights", {}) or analysis.get("synthesis", {})
+    _draw_panel(pdf, MARGIN, PAGE_HEIGHT - 250, PAGE_WIDTH - (MARGIN * 2), 150, COLORS["panel_alt"])
+    pdf.setFillColor(COLORS["primary"])
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(MARGIN + 18, PAGE_HEIGHT - 132, "Current state")
+    lines = [
+        f"Session topic: {insights.get('session_topic', 'Not specified')}",
+        f"Dominant intention: {insights.get('dominant_intention', 'Not specified')}",
+        f"Current load: {insights.get('current_load', 'Not specified')}",
+        f"Dominant needs: {', '.join(insights.get('current_needs', [])) or 'Not specified'}",
+        f"Likely relational posture: {insights.get('likely_relational_posture', 'Not specified')}",
+    ]
+    _draw_bullets(pdf, lines, MARGIN + 18, PAGE_HEIGHT - 156, PAGE_WIDTH - (MARGIN * 2) - 36, font_size=10)
+
+    _draw_panel(pdf, MARGIN, PAGE_HEIGHT - 500, PAGE_WIDTH - (MARGIN * 2), 206, COLORS["panel"])
+    pdf.setFillColor(COLORS["primary"])
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(MARGIN + 18, PAGE_HEIGHT - 322, "Stress/watchout signals and actions")
+    stress = analysis.get("possible_stress_signals", [])[:3]
+    actions = analysis.get("actions_to_test", [])[:3]
+    plan = insights.get("action_plan", analysis.get("synthesis", {}).get("action_plan", {}))
+    bullets = [
+        *(f"Stress signal: {item}" for item in stress),
+        *(f"Action to test: {item}" for item in actions),
+        f"24h plan: {plan.get('next_24h', 'Not specified')}",
+        f"7d plan: {plan.get('next_7_days', 'Not specified')}",
+        f"30d plan: {plan.get('next_30_days', 'Not specified')}",
+    ]
+    _draw_bullets(pdf, bullets, MARGIN + 18, PAGE_HEIGHT - 346, PAGE_WIDTH - (MARGIN * 2) - 36, font_size=10)
+
 def _methodology_page(pdf: canvas.Canvas, analysis: dict[str, Any]) -> None:
-    _draw_page_header(pdf, "Note methodologique", "Cadre d'interpretation et prudence d'usage", 6)
+    _draw_page_header(pdf, "Note methodologique", "Cadre d'interpretation et prudence d'usage", 7)
     _draw_panel(pdf, MARGIN, PAGE_HEIGHT - 250, PAGE_WIDTH - (MARGIN * 2), 138, COLORS["panel_alt"])
     pdf.setFillColor(COLORS["primary"])
     pdf.setFont("Helvetica-Bold", 13)
@@ -327,7 +361,7 @@ def _methodology_page(pdf: canvas.Canvas, analysis: dict[str, Any]) -> None:
     _draw_wrapped_text(pdf, DISCLAIMER_TEXT, MARGIN + 18, 166, PAGE_WIDTH - (MARGIN * 2) - 36, font_size=11)
 
 
-def generate_report(session: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+def generate_report(session: dict[str, Any], profile: dict[str, Any], onboarding: dict[str, Any] | None = None) -> dict[str, Any]:
     analysis = session.get("analysis") or {}
     if not analysis:
         raise ValueError("Impossible de generer un PDF sans analyse disponible.")
@@ -343,13 +377,15 @@ def generate_report(session: dict[str, Any], profile: dict[str, Any]) -> dict[st
     pdf = canvas.Canvas(str(target_path), pagesize=A4)
     _cover_page(pdf, session)
     pdf.showPage()
-    _summary_page(pdf, analysis)
+    _summary_page(pdf, analysis, onboarding)
     pdf.showPage()
     _indicator_page(pdf, analysis, score_chart, theme_chart)
     pdf.showPage()
     _quotes_page(pdf, session, analysis)
     pdf.showPage()
     _profile_page(pdf, profile, history_chart)
+    pdf.showPage()
+    _onboarding_page(pdf, onboarding, analysis)
     pdf.showPage()
     _methodology_page(pdf, analysis)
     pdf.save()

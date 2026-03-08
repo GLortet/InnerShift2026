@@ -13,6 +13,7 @@ from config import (
     REPORTS_DIR,
     SESSIONS_DIR,
     TRANSCRIPTS_DIR,
+    ONBOARDING_DIR,
 )
 from modules.utils import ensure_directories, load_json_file, save_json_file, write_text_file
 
@@ -39,6 +40,10 @@ def transcript_file_path(session_id: str) -> Path:
 
 def report_file_path(session_id: str, filename: str) -> Path:
     return REPORTS_DIR / filename.replace("{session_id}", session_id)
+
+
+def onboarding_file_path(session_id: str) -> Path:
+    return ONBOARDING_DIR / f"{session_id}.json"
 
 
 def save_session_record(session: dict[str, Any]) -> Path:
@@ -84,3 +89,13 @@ def list_report_files() -> list[Path]:
 
 def list_audio_files() -> list[Path]:
     return sorted(AUDIO_DIR.glob("*"))
+
+
+def save_onboarding_record(session_id: str, payload: dict[str, Any]) -> Path:
+    target = onboarding_file_path(session_id)
+    save_json_file(target, payload)
+    return target
+
+
+def load_onboarding_record(session_id: str) -> dict[str, Any] | None:
+    return load_json_file(onboarding_file_path(session_id))

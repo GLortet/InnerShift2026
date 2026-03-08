@@ -32,6 +32,7 @@ def build_empty_session(title: str | None = None, user_id: str = DEFAULT_USER_ID
         },
         "analysis": {},
         "report": {},
+        "onboarding": {"completed": False, "safety_blocked": False},
     }
 
 
@@ -89,6 +90,25 @@ def update_transcription_text(session: dict[str, Any], text: str, edited: bool =
     storage.save_transcript_text(session["id"], session["transcription"]["text"])
     return save_session(session)
 
+
+
+
+def attach_onboarding(session: dict[str, Any], onboarding_payload: dict[str, Any]) -> dict[str, Any]:
+    session = deepcopy(session)
+    session["onboarding"] = {
+        "completed": onboarding_payload.get("completed", False),
+        "safety_blocked": onboarding_payload.get("safety", {}).get("blocked", False),
+        "orientation": onboarding_payload.get("orientation", {}).get("area"),
+        "updated_at": utc_now_iso(),
+    }
+    storage.save_onboarding_record(session["id"], onboarding_payload)
+    return save_session(session)
+
+
+def load_onboarding(session_id: str | None) -> dict[str, Any] | None:
+    if not session_id:
+        return None
+    return storage.load_onboarding_record(session_id)
 
 def attach_analysis(session: dict[str, Any], analysis_payload: dict[str, Any]) -> dict[str, Any]:
     session = deepcopy(session)
